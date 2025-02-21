@@ -1,0 +1,703 @@
+Table of Contents
+-----------------
+
+- [Table of Contents](#table-of-contents)
+- [Authentication prerequisite ](#authentication-prerequisite)
+  - [Scopes](#scopes)
+  - [Important](#important)
+- [Base URL](#base-url)
+- [Resources](#resources)
+  - [Attachment](#attachment)
+- [Query Resources patterns](#query-resources-patterns)
+  - [Query Resources with attribute selection](#query-resources-with-attribute-selection)
+  - [Query Resources with attribute filtering](#query-resources-with-attribute-filtering)
+  - [Query Resources with iterators](#query-resources-with-iterators)
+  - [Sorting](#sorting)
+- [Errors](#errors)
+- [Errors 401](#errors-401)
+   - [Token lifetime](#token-lifetime)
+- [Errors 400](#errors-400)
+- [Errors 404](#errors-404)
+- [Others](#others)
+- [Use cases](#use-cases)
+- [I want to upload an attachment.](#i-want-to-upload-an-attachment)
+- [I want to retrieve the metadata of an attachment by id.](#i-want-to-retrieve-the-metadata-of-an-attachment-by-id)
+- [I want to retrieve an attachment by id.](#i-want-to-retrieve-attachment-by-id)
+- [I want to list all the attachment that i have created .](#i-want-to-list-all-the-attachment-that-i-have-created)
+
+
+## Authentication prerequisite
+
+Access to this API is secured by the OAuth 2.0  framework with the [Client Credentials grant type](https://oauth.net/2/grant-types/client-credentials/), which means that you will have to present an OAuth 2.0 `access_token` whenever you want to request this API.
+
+It's easy to negotiate this `access_token`: just send a request to the proper token negotiation endpoint, with a Basic Authentication header valued with your own `client_id` and `client_secret`.
+
+For this API, the token negotiation endpoint is:
+
+
+
+`https://api.orange.com/oauth/v3/token` 
+
+A [technical guide](/tech_guide/2-legged-oauth-2-v3/) is available to learn how to negotiate and manage these `access_token`.
+
+[SDK to manage token lifecycle](/tech_guide/2-legged-oauth-2-v3/#sample-code) could help you to implement cache token.
+
+### Scopes
+Scopes restrict specific request verbs for any resource of this api. You must specify at least one when requesting for an access_token. This is done by adding a scope parameter within the access token request. Scopes are additive and shall be space separated.
+
+As an example:
+```
+curl -X POST \
+-H "Authorization: Basic NktSSHljksdj7P...Jjndb6UdnlrT2lOaA==" \
+-H "Content-Type: application/x-www-form-urlencoded" \
+-H "Accept: application/json" \
+-d "grant_type=client_credentials&scope=owf:scope1 owf:scope2" \
+https://api.orange.com/oauth/v3/token
+```
+
+Scopes available in this api are explained below.
+| Scope      | Description |
+| ---- | ----------- |
+| owf:attachment:v1:readonly      | Allow GET, HEAD http request for any resource of this api       |
+| owf:attachment:v1:write   | Allow POST http request for any resource of this api. PUT and DELETE http request are not available for this API.        |
+
+
+- If your client will only do `GET` requests, you may request an `access_token` with '`&scope=owf:attachment:v1:readonly`'.
+- If your client will do `GET` and `POST` requests, you must request an `access_token` with '`&scope=owf:attachment:v1:readonly owf:attachment:v1:write`'.
+
+Scopes are not fine-grained permissions. While an `access_token` can allows your client application to do GET or POST request, the request can be forbidden at the resource level.
+
+> We strongly encourage you to register a dedicated client application to subscribe to all United Way apis. You will be able to request an `access_token` with all scopes required to do a complete scenario over all needed apis.
+
+## Important
+> Please pay particular attention to properly handle authentication error responses in your application. [See the section Errors](#errors-401)
+
+## Base URL
+
+The Base URL is the first part of the full invocation URL, just before the resource paths defined in the API reference.
+
+The Base URL is comprised of the scheme ('https'), the authority (i.e. the Fully Qualified Domain Name) and the API base path.
+
+Whenever you request this API and encounter a 404 NOT FOUND HTTP error response, please check first that the Base URL is correct.
+
+The Base URL for this API is: `https://api.orange.com/discover/owf-attachment/v1/`
+
+
+The documentation below assumes that, whenever you make requests on this API, you are prepending the Base URL to the resource paths defined for this API.
+
+| Base URL | 
+| ---- | 
+|https://api.orange.com/discover/owf-attachment/v1/| 
+
+## Resources
+
+### Attachment
+The below table describes the attributes required for any attachment
+| Name      | Type/Format | Description | Example |
+| ---- | ----- | ----------- | --- |
+| id | string | Unique identifier for this particular attachment | '72db2628-73ac-11ec-90d6-0242ac120003' |
+| fileStatus | array | used to indicate the current status of the file (Enum: inReview, opened, closed, obsolete, removed) | 'opened' |
+| creationDate | string/date | The timestamp at which the file was saved on the server. | '2022-11-17T11:12:07.739Z' |
+| fileName | string | used to register filename | 'attachment; filename=\"myFilename.txt\"' |
+| s3FileLocation | string | The file location on AWS S3 servers only accessible through our backend. | . |
+| fileType | string | Attachment type such as video, picture | . |
+| fileSize | integer | indicates the size of the saved file, in bytes. It is in decimal number of octets. | . |
+| lastStatusChangeDate | string/date | used to indicate the last time the status of the file was changed | '2022-11-17T11:12:07.739Z' |
+| relatedParty | string | used to indicated the organization that created the file and that is the sole owner of the file | . |
+
+
+
+Get the data of a previously created attachment:
+
+
+#### Request
+```
+curl -X GET -H "Authorization: Bearer {access_token}" \
+https://api.orange.com/owf-attachment/v1/attachment/{uuid}
+```
+
+#### Response
+Headers
+```http
+HTTP/1.1 200 OK
+Content-Disposition: attachment; filename="file"
+Content-Length: 100
+Content-Location: attachment/3f0096dd-90a3-432e-8420-37bdfb92f58d
+Content-Type: application/pdf
+Date: Mon, 21 Nov 2022 12:25:25 GMT
+X-File-Content-Length: 100
+```
+Body
+```
+binary file stream
+```
+>
+>Detailed information about all the resources of this API: [check the API reference](api-reference)
+
+Query Resources patterns
+------------------------
+
+### Query Resources with attribute selection
+
+In every GET request, you can add a **fields** parameters to filter the response body with a subset of the attributes.
+
+_Example:_
+
+    GET https://api.orange.com/discover/owf-attachment/v1/attachment?fileStatus=draft
+
+
+_Response:_
+    
+
+    [
+    {
+        "id": "bea006cd-25a6-4701-9610-21d52b3938cc",
+        "href": "attachment/bea006cd-25a6-4701-9610-21d52b3938cc",
+        "disposition": "attachment; filename=\"file.pdf\"",
+        "fileStatus": "draft",
+        "fileSize": 317939,
+        "fileType" : "application/pdf",
+        "creationDate": "2023-05-16T17:09:56.203Z",
+        "lastUpdate" : "2023-05-16T17:09:56.203Z",
+        "statusChange" : [], 
+        "relatedEntity": []
+    },
+    {
+        "id": "4033c5ed-1c98-4c6e-a969-0ee0f3cc1c0a",
+        "disposition": "attachment; filename=\"file.pdf\"",
+        "fileStatus": "draft",
+        "fileSize": 317939,
+        "fileType" : "application/pdf",
+        "creationDate": "2023-05-16T17:09:56.203Z",
+        "lastUpdate" : "2023-05-16T17:09:56.203Z",
+        "statusChange" : [], 
+        "relatedEntity": []
+    }
+    ]
+    
+
+For better response time, only request fields you really need. Especially when requesting on list endpoints.
+
+**Note that attributes `id` and `href` are always returned, even if `fields=none`.**
+
+### Query Resources with attribute filtering
+
+You can filter attachment by specifying attributes in the `querystring`. However, only first level attributes can be used as a filter criteria. Herein, the exhaustive list of available parameters with the associated allowed operators.
+
+
+The operations available for the attributes (date, integer and string) are:
+
+*   `=` or `.eq=` : equal to
+*   `>=` or `.gte=` : greater than or equal to
+*   `>` or `.gt=` : strictly greater than
+*   `<=` or `.lte=` : lower than or equal to
+*   `<` or `.lt=` : strictly lower than
+*   `<>` or `.ne=` : Not equal
+
+_Example:_
+
+    GET https://api.orange.com/discover/owf-attachment/v1/attachment?fileStatus=draft&creationDate.gte=2023-05-16
+
+
+_Response:_
+
+    [
+       {
+            "id": "5a5e179d-c45d-479a-b5b9-dca8e534d8dd",
+            "href": "attachment/5a5e179d-c45d-479a-b5b9-dca8e534d8dd",
+            "disposition": "attachment; filename=\"myCar.pdf\"",
+            "fileStatus": "draft",
+            "fileSize": 225769,
+            "fileType" : "application/pdf",
+            "creationDate": "2023-05-16T18:46:58.084Z",
+            "lastUpdate": "2023-06-21T10:05:51.677Z",
+            "statusChange" : [],
+            "relatedEntity": []
+        },
+        {
+            "id": "dbb393dd-aef7-4e48-9236-441a4fea2de8",
+            "href": "attachment/dbb393dd-aef7-4e48-9236-441a4fea2de8",
+            "disposition": "attachment; filename=\"myCar.pdf\"",
+            "fileStatus": "draft",
+            "fileSize": 225769,
+            "fileType" : "application/pdf",
+            "creationDate": "2023-05-16T18:46:58.084Z",
+            "lastUpdate": "2023-06-20T10:05:51.677Z",
+            "statusChange" : [],
+            "relatedEntity": []
+        }
+    ]
+
+
+
+
+### Query Resources with iterators
+
+When requesting collections, you should set pagination query parameters.
+
+*   `offset`: Requested index for start of resources to be provided in response requested by client.
+*   `limit`: Requested number of resources to be provided in response requested by client.
+
+After each request, explore the http headers to retrieve the number of results
+
+*   `X-Result-Count`: The number of matching resources in the JSON response.
+*   `X-Total-Count`: The total number of matching resources.
+
+If `X-Total-Count` is bigger than `X-Result-Count`, you need to request again by incrementing the `offset` query parameter with the `X-Result-Count` value. You can limit the number of result per page with `limit`.
+
+**Note that you can't request more result per page than the default. Be sure to read the header `X-Result-Count`.**
+
+For example, to retrieve only the second element in the list
+
+_Example:_
+
+    GET https://api.orange.com/discover/owf-attachment/v1/attachment?offset=1&limit=1
+
+_Response:_
+
+    [
+        {
+            "id": "0dbbcb9f-727a-4c92-b617-e83cd7ffc1bd",
+            "href": "attachment/0dbbcb9f-727a-4c92-b617-e83cd7ffc1bd",
+            "disposition": "attachment; filename=\"myCar.pdf\"",
+            "fileStatus": "draft",
+            "fileSize": 225769,
+            "fileType" : "application/pdf",
+            "creationDate": "2023-05-16T18:46:58.084Z",
+            "lastUpdate": "2023-06-21T10:05:51.677Z",
+            "statusChange" : [],
+            "relatedEntity": []
+        }
+    ]
+
+### Sorting
+
+The query parameter **sort** is used to order resources to be provided in response (used `-` if you want descending).
+
+_Example:_
+
+    GET https://api.orange.com/discover/owf-attachment/v1/attachment?sort=-creationDate
+    
+_Response:_
+
+    [
+      {
+        "id": "bea006cd-25a6-4701-9610-21d52b3938cc",
+        "href": "attachment/bea006cd-25a6-4701-9610-21d52b3938cc",
+        "disposition": "attachment; filename=\"file.png\"",
+        "fileStatus": "draft",
+        "fileSize": 317939,
+        "fileType" : "application/pdf",
+        "creationDate": "2023-05-16T17:09:56.203Z",
+        "lastUpdate": "2023-06-21T10:05:51.677Z",
+        "statusChange" : [],
+        "relatedEntity": []
+      },
+      {
+        "id": "4033c5ed-1c98-4c6e-a969-0ee0f3cc1c0a",
+        "href": "attachment/4033c5ed-1c98-4c6e-a969-0ee0f3cc1c0a",
+        "disposition": "attachment; filename=\"file.png\"",
+        "fileStatus": "draft",
+        "fileSize": 317939,
+        "fileType" : "application/pdf",
+        "creationDate": "2023-05-15T16:25:40.117Z",
+        "lastUpdate": "2023-06-21T10:05:51.677Z",
+        "statusChange" : [],
+        "relatedEntity": []
+     }
+    ]
+
+### Contains : `* = *{text}* `
+
+The **contains** parameter in the query is used to find a word in the description or note in the response. 
+
+_Example:_
+
+    GET https://api.orange.com/discover/owf-attachment/v1/attachment?disposition*=*Diagram*&fields=disposition
+    
+
+    [
+        {
+            "id": "695a1d6d-5e78-4895-8817-b79363a70923",
+            "href": "attachment/695a1d6d-5e78-4895-8817-b79363a70923",
+            "disposition": "attachment; filename=\"Diagrams.pdf\""
+        }
+    ]
+
+
+### Start with :` * = {text}*`
+
+_Example:_
+
+    GET https://api.orange.com/discover/owf-attachment/v1/attachment?disposition*=attachment*&fields=disposition
+    
+    [
+        {
+            "id": "695a1d6d-5e78-4895-8817-b79363a70923",
+            "href": "attachment/695a1d6d-5e78-4895-8817-b79363a70923",
+            "disposition": "attachment; filename=\"Diagrams.pdf\""
+        }
+    ]
+
+
+### Ends with : ` * = *{text}`
+
+_Example:_
+
+    GET https://api.orange.com/discover/owf-attachment/v1/attachment?disposition*=pdf&fields=disposition
+    
+
+    [
+        {
+            "id": "695a1d6d-5e78-4895-8817-b79363a70923",
+            "href": "attachment/695a1d6d-5e78-4895-8817-b79363a70923",
+            "disposition": "attachment; filename=\"Diagrams.pdf\""
+        }
+    ]
+
+
+### Example of filter on level 2 : `relatedEntity.id, relatedEntity.dateOfReferencing,`, [...]
+
+_Example:_
+
+    GET https://api.orange.com/discover/owf-attachment/v1/attachment?relatedEntity.id=5f2ca316-2025-459c-8cae-49924bc64163&fields=relatedEntity
+    
+
+    [
+        {
+            "id": "695a1d6d-5e78-4895-8817-b79363a70923",
+            "href": "attachment/695a1d6d-5e78-4895-8817-b79363a70923",
+            "relatedEntity": [
+                {
+                    "id": "5f2ca316-2025-459c-8cae-49924bc64163",
+                    "dateOfReferencing": "2024-03-05T11:23:36.276Z",
+                    "context": "sollicitation"
+                }
+            ]
+        }
+    ] 
+
+
+
+## Errors
+
+#### Important
+Failure to code a proper management of the error responses in your application may affect its resilience. Access to the API may be revoked if your application generates too many mishandled errors.
+
+Your application must parse the returned HTTP response to check if an error is returned instead of a 200 OK. Orange APIs use appropriate HTTP status codes to indicate any request processing error, providing detailed information about the underlying fault. This helps you provide better feedback to your users and implement failure recovery mechanisms in your application.
+
+For details on the main error codes, response format, tips and troubleshooting, [see our Handling API errors guide](/tech_guide/orange-apis-error-handling/)
+
+### Errors 401
+If you get a status code `401` with the error code `42`  (such as below), then request a new `access token`.  
+
+```
+HTTP/1.1 401 Unauthorized
+Content-Type: application/json
+{
+  "code": 42,
+  "message": "Expired credentials",
+  "description": "The requested service needs credentials, and the ones provided 
+  were out-of-date."
+}
+```
+
+#### Token lifetime
+> - Each `access_token` has a lifetime validity period.  This validity period may change overtime to comply with security rules.
+> - The token server has a maximum hourly quota per client application to prevent from misuse.  
+>Therefore,  
+>DON'T request an `access_token` each time you invoke the service API.  
+>DON'T hard-code a validity duration in your application.  
+>Instead, your application must parse the returned status code and error code to check if it needs to request a new `access token`.
+
+For other `401` errors: [check that you provide the right `Autorization` header with the right `Bearer`](/tech_guide/2-legged-oauth-2-v3/)
+
+
+###  Errors 400
+In case of invalid request to the API, you will receive a `400` error code with detailed information in the body message, such as:
+
+```json
+HTTP/1.1 400 Bad Request 
+{
+  "code": 25,
+  "description": "Missing header",
+  "message": "...."
+}
+```
+### Errors 404
+
+If you try to access to a non-existent resource using the following endpoint for example : `GET attachment/{id}`:
+
+    HTTP/1.1 404 Not Found
+    {
+        "code": "60",
+        "message": "Resource not found",
+        "reason": "Resource not found",
+        "@type": "Error"
+    }
+
+[Consult the other errors (api-reference) ](https://developer.orange.com/apis-preview?id-preview=nCBDP8AkgepeRbGH&content-type=api-reference)  
+
+
+###  Others
+Below you can find a table with the http codes and their respective functional codes and messages :
+
+| HTTP error code      | Quotify code error | error message |
+| --- | ----- | ----------- |
+|400	|20	|Invalid URL parameter value
+|400	|21	|Missing body
+|400	|22	|Invalid body
+|400	|23	|Missing body field
+|400	|24	|Invalid body field
+|400	|25	|Missing header
+|400	|26	|Invalid header value
+|400	|27	|Missing query-string parameter
+|400	|28	|Invalid query-string parameter value
+|401	|40	|Missing credentials
+|401	|41	|Invalid credentials
+|401	|42	|Expired credentials
+|403	|50	|Access denied
+|403	|51	|Forbidden requester
+|403	|52	|Forbidden user
+|403	|53	|Too many requests
+|404	|60	|Resource not found
+|405	|61	|Method not allowed
+|406	|62	|Not acceptable
+|408	|63	|Request time-out
+|409	|69	|Conflict
+|411	|64	|Length required
+|412	|65	|Precondition failed
+|413	|66	|Request entity too large
+|414	|67	|Request-URI too long
+|415	|68	|Unsupported Media Type
+|429	|53	|Too many requests
+|500	|1	|Internal Server Error
+|502	|1	|Internal error
+|502	|3	|Bad gateway
+|503	|5	|The service is temporarily unavailable
+|503	|6	|Orange API is over capacity, retry later !
+
+
+
+## Use cases
+---------
+
+1\. I want to upload an attachment.
+-----------------------------------------------------------
+To upload a file, you must send a method of Type Post
+
+_Example:_
+
+    POST https://api.orange.com/discover/owf-attachment/v1/attachment
+
+  ![enter image description here](asset:'OA55GR8Cb4Eecc9A' "enter image title here")
+
+  | Step | Description |
+  | ---- | ----- |
+  | `1`| Select `POST` http method|
+  | `2`| Set the Attachment resource URI in the address bar | 
+  | `3`| Changes Request body type to  `binary`|
+  | `4`| Add file in the request body | 
+  | `5`| Finally, Sends the request  |
+
+_Response:_
+
+    [
+        {
+            "id": "0dbbcb9f-727a-4c92-b617-e83cd7ffc1bd",
+            "href": "attachment/0dbbcb9f-727a-4c92-b617-e83cd7ffc1bd",
+            "disposition": "attachment; filename=\"file.pdf\"",
+            "fileStatus": "draft",
+            "fileSize": 19100,
+            "fileType" : "application/pdf",
+            "creationDate": "2023-04-24T13:48:38.262Z",
+            "lastUpdate": "2023-04-22T10:05:51.677Z",
+            statusChange": [
+                {
+                    "changeDate": "2023-04-22T10:05:30.784Z",
+                    "changeReason": "",
+                    "status": "draft",
+                    "@baseType": "StatusChange",
+                    "@type": "StatusChange"
+                }
+            ],
+            "relatedEntity": []
+        }
+    ]
+
+
+## Important 
+   In the header, fill all the mandatory fields listed in the swagger including the : 
+
+   | Key | Value |
+   | ---- | ----- |
+   |`Content-Type `: | The MIME type of the file|
+   |`Content-Disposition `: | Allows specifying the name of the attachment within the ‘filename=’ block., should be set as 'attachment; filename="<<filename>>"’|
+   | `Content-Length `: | Size of the attached file to be uploaded| 
+
+_Example:_
+![enter image description here](asset:'S73SDo9TwIbXcp5o' "enter image title here")
+
+## Important 
+* The maximum file size allowed must not exceed `5Mb`
+* In the `Content-Disposition` field, the `filename` does not accept special characters such as `é`, `è`, `ç`, `%`, `"`, `à`
+* The `relatedEntity[]` field allows for the concept of context and `referencing` of an `attachment`, meaning by default it is empty and when you link your attachment to a ticket, the ticket's ID and context appear here. 
+
+_Example:_ 
+
+    [
+        {
+            "id": "ec60946e-ba1c-40e8-9f51-02ef176aa4e0",
+            "href": "attachment/ec60946e-ba1c-40e8-9f51-02ef176aa4e0",
+            "disposition": "attachment; filename=\"Diagrams.pdf\"",
+            "fileStatus": "draft",
+            "fileSize": 124814,
+            "fileType" : "application/pdf",
+            "creationDate": "2023-10-10T09:41:27.343Z",
+            "lastUpdate": "2023-06-21T10:05:51.677Z",
+            "statusChange": [
+                {
+                    "changeDate": "2025-02-21T10:05:30.784Z",
+                    "changeReason": "",
+                    "status": "draft",
+                    "@baseType": "StatusChange",
+                    "@type": "StatusChange"
+                },
+                {
+                    "changeDate": "2025-02-21T10:05:51.677Z",
+                    "changeReason": "Attachment added to a Trouble Ticket.",
+                    "status": "opened",
+                    "@baseType": "StatusChange",
+                    "@type": "StatusChange"
+                }
+            ],
+            "relatedEntity": [
+                {
+                    "id": "0149ba56-d37c-45d8-914f-b94728d0ef3f",
+                    "dateOfReferencing": "2023-10-10T09:41:42.243Z",
+                    "context": "sollicitation"
+                }
+            ]
+        }
+    ]
+
+
+
+2\. I want to retrieve the metadata of an attachment by id.
+-----------------------------------------------------------
+To retrieve an attachment, you must send a request using `HEAD` http verb
+
+_Example:_
+
+    HEAD https://api.orange.com/discover/owf-attachment/v1/attachment/a30efa9b-bd3a-4ea0-8062-3041a4079159
+   
+`file identifier (id) ` is  required  
+![enter image description here](asset:'vhrIGTEJLTXebOQ0' "enter image title here")
+
+  | Step | Description |
+  | ---- | ----- | 
+  | `1`| Changes http verb to ‘HEAD’ |
+  | `2`| . Sets the Attachment resource URI with the attachment identifier as a path variable in the address bar| 
+  | `3`| Finally, sends the request|
+  | `4`| See the metadata in the `Headers` of the response body| 
+
+
+
+3\. I want to retrieve an attachment by id.
+-----------------------------------------------------------
+To retrieve an attachment, you must send a method of Type GET 
+
+_Example:_
+
+    GET https://api.orange.com/discover/owf-attachment/v1/attachment/8b31a877-c41a-44a3-a451-4a132af2b770 
+
+  `Attachment identifier` is  required 
+
+  ![enter image description here](asset:'MKJ66F955yZB4pat' "enter image title here")
+   | Step | Description |
+   | ---- | ----- |
+   | `1`| Changes http verb to ‘GET’|
+   | `2`| Define the URL of your endpoint and add the `Id` of the attachment you want to retrieve using the path parameter "`/`"  | 
+   | `3`| Finally, click `Send`|
+   | `4`| See the attachment in the `Body`| 
+   
+
+4\.  I want to list all the attachment that i have created.
+-----------------------------------------------------------
+To retrieve an attachment, you must send a method of Type GET 
+
+_Example:_
+
+      GET https://api.orange.com/discover/owf-attachment/v1/attachment/
+
+_Response:_
+
+    [
+      {
+        "id": "9df81ff6-3464-4313-9d6c-bad9000569d9",
+        "href": "attachment/9df81ff6-3464-4313-9d6c-bad9000569d9",
+        "disposition": "attachment; filename=\"myCar.jpeg\"",
+        "fileStatus": "opened",
+        "fileSize": 225769,
+        "fileType" : "application/pdf",
+        "creationDate": "2023-05-17T17:30:24.489Z"
+        "lastUpdate": "2023-06-21T10:05:51.677Z",
+        "statusChange" : [],
+        "relatedEntity": []
+      },
+      {
+        "id": "c3d6ee01-d21a-4538-95b6-82ad3dda4137",
+        "href": "attachment/c3d6ee01-d21a-4538-95b6-82ad3dda4137",
+        "disposition": "attachment; filename=\"nom PJ avec espace.png\"",
+        "fileStatus": "opened",
+        "fileSize": 6845,
+        "fileType" : "application/pdf",
+        "creationDate": "2023-05-17T11:34:17.672Z",
+        "lastUpdate": "2023-06-21T10:05:51.677Z",
+        "statusChange" : [],
+        "relatedEntity": []
+     },
+     {
+        "id": "65bb578c-ea6b-4a8a-8eee-cc91f12538b9",
+        "href": "attachment/65bb578c-ea6b-4a8a-8eee-cc91f12538b9",
+        "disposition": "attachment; filename=\"nom PJ avec espace.png\"",
+        "fileStatus": "draft",
+        "fileSize": 6845,
+        "fileType" : "application/pdf",
+        "creationDate": "2023-05-17T11:27:10.536Z",
+        "lastUpdate": "2023-06-21T10:05:51.677Z",
+        "statusChange" : [],
+        "relatedEntity": []
+     }
+    ]
+
+
+## Important 
+
+To find all attachments we send a `GET ALL request`. You can also apply all the filter criteria described in the `Query resources` patterns section to refine the results.
+
+_Example:_ 
+    
+    GET https://api.orange.com/discover/owf-attachment/v1/attachment?fields=creationDate&sort=-creationDate
+
+
+_Response:_ 
+
+    [
+        {
+            "id": "ed12b7cb-d7ad-4a06-bd94-4c4c7da0a270",
+            "href": "attachment/ed12b7cb-d7ad-4a06-bd94-4c4c7da0a270",
+            "creationDate": "2023-05-19T15:52:41.799Z"
+        },
+        {
+            "id": "68b77386-e49c-4006-a842-0dca00b2ac60",
+            "href": "attachment/68b77386-e49c-4006-a842-0dca00b2ac60",
+            "creationDate": "2023-05-19T11:37:05.198Z"
+        },
+        {
+            "id": "a30efa9b-bd3a-4ea0-8062-3041a4079159",
+            "href": "attachment/a30efa9b-bd3a-4ea0-8062-3041a4079159",
+            "creationDate": "2023-05-18T11:28:38.288Z"
+        }
+        ...
+    ]
