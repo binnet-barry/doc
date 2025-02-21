@@ -1,0 +1,1535 @@
+>[Download this Markdown template](https://plazza.orange.com/docs/DOC-1461170) Customize the {variables}, complete the section Resources, delete the irrelevant paragraphs.
+
+Table of Contents
+-----------------
+
+- [Table of Contents](#table-of-contents)
+- [Authentication prerequisite](#authentication-prerequisite)
+  - [Scopes](#scopes)
+  - [Important](#important)
+- [Base URL](#base-url)
+- [Resources](#resources)
+  - [Trouble Ticket](#trouble-ticket)
+  - [Trouble Ticket Specification](#trouble-ticket-specification)
+  - [Hub](#hub)
+- [Sub resources](#sub-resources)
+  - [AttachmentRefOrValue](#attachmentreforvalue)
+  - [Characteristic](#characteristic)
+  - [Note](#note)
+  - [RelatedParty](#relatedparty)
+  - [StatusChange](#statuschange)
+  - [ChannelRef](#channelref)
+  - [TroubleTicketSpecificationRef](#troubleticketspecificationref)
+- [Trouble Ticket life cycle](#trouble-ticket-life-cycle)
+- [Query Resources patterns](#query-resources-patterns)
+  - [Query Resources with attribute selection](#query-resources-with-attribute-selection)
+  - [Query Resources with attribute filtering](#query-resources-with-attribute-filtering)
+  - [Query Resources with iterators](#query-resources-with-iterators)
+  - [Sorting](#sorting)
+- [Errors](#errors)
+  - [Errors 401](#errors-401)
+    - [Token lifetime](#token-lifetime)
+  - [Errors 400](#errors-400)
+  - [Errors 404](#errors-404)
+  - [Others](#others)
+- [Use cases](#use-cases)
+- [I want to retrieve specifications.](#1-i-want-to-retrieve-specifications)
+- [I want to create a trouble ticket based on specifications.](#2-i-want-to-create-a-trouble-ticket-based-on-specifications)
+- [I want to create a trouble ticket with an attachment.](#3-i-want-to-create-a-trouble-ticket-with-an-attachment)
+- [I want to retrieve a trouble ticket.](#4-i-want-to-retrieve-a-trouble-ticket)
+- [I want to retrieve all my trouble tickets (with filtering and sorting).](#5-i-want-to-retrieve-all-my-trouble-tickets-with-filtering-and-sorting)
+- [I want to update my trouble ticket with a note.](#6-i-want-to-update-my-trouble-ticket-with-a-note)
+- [I want to update my trouble ticket with an attachment.](#7-i-want-to-update-my-trouble-ticket-with-an-attachment)
+- [I want to subscribe to notifications /Hub.](#8-i-want-to-subscribe-to-notifications-hub)
+- [I want to renew a private key.](#9-i-want-to-renew-a-private-key)
+- [I want to list all registered listeners](#10-i-want-to-list-all-registered-listeners)
+- [I want to delete a subscription to notifications /Hub.](#11-i-want-to-delete-a-subscription-to-notifications-hub)
+
+This document is a complement to TMF 621 documentation regarding the technical details mandated by the TM Forum applied to our application ([https://www.tmforum.org/resources/specification/tmf621-trouble-ticket-management-api-rest-specification-r19-0-0/](https://www.tmforum.org/resources/specification/tmf621-trouble-ticket-management-api-rest-specification-r19-0-0/))
+
+Authentication prerequisite
+---------------------------
+
+Access to this API is secured by the OAuth 2.0 framework with the [Client Credentials grant type](https://oauth.net/2/grant-types/client-credentials/), which means that you will have to present an OAuth 2.0 `access_token` whenever you want to request this API.
+
+It's easy to negotiate this `access_token`: just send a request to the proper token negotiation endpoint, with a Basic Authentication header valued with your own `client_id` and `client_secret`.
+
+For this API, the token negotiation endpoint is: `https://api.orange.com/oauth/v3/token`.
+
+A [technical guide](https://developer.orange.com/tech_guide/2-legged-oauth-2-v3/) is available to learn how to negotiate and manage these `access_token`.
+
+[SDK to manage token lifecycle](https://developer.orange.com/tech_guide/2-legged-oauth-2-v3/#sample-code) could help you to implement cache token.
+
+### Scopes
+
+Scopes restrict specific request verbs for any resource of this api. You must specify at least one when requesting for an `access_token`. This is done by adding a `scope` parameter within the [access token request](https://developer.orange.com/tech_guide/2-legged-oauth-2-v3/#step_1). Scopes are additive and shall be space separated.
+
+As an example:
+
+    curl -X POST \
+    -H "Authorization: Basic NktSSHljksdj7P...Jjndb6UdnlrT2lOaA==" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -H "Accept: application/json" \
+    -d "grant_type=client_credentials&scope=owf:trouble-ticket:scope1 owf:trouble-ticket:scope2" \
+    https://api.orange.com/oauth/v3/token
+    
+
+Scopes available in this api are explained below.
+
+| Scope      | Description | 
+| ---- | ----- | 
+| owf:trouble-ticket:v1:readonly | Allow GET http request for any resource of this api |
+| owf:trouble-ticket:v1:write | Allow POST, PATCH http request for any resource of this api |
+
+
+*   If your client will only do `GET` requests, you may request an `access_token` with '`&scope=owf:trouble-ticket:v1:readonly`'.
+*   If your client will do `GET` and `POST` requests, you must request an `access_token` with '`&scope=owf:trouble-ticket:v1:write`'.
+
+Scopes are not fine-grained permissions. While an `access_token` can allows your client application to do GET or POST request, the request can be forbidden at the resource level.
+
+> We strongly encourage you to register a dedicated client application to subscribe to all Trouble Ticket Management apis. You will be able to request an `access_token` with all scopes required to do a complete scenario over all needed apis.
+
+### Important
+
+> Please pay particular attention to properly handle authentication error responses in your application. [See the section Errors](#errors-401-1)
+
+Base URL
+--------
+
+The Base URL is the first part of the full invocation URL, just before the resource paths defined in the API reference.
+
+The Base URL is comprised of the scheme ('https'), the authority (i.e. the Fully Qualified Domain Name) and the API base path.
+
+Whenever you request this API and encounter a 404 NOT FOUND HTTP error response, please check first that the Base URL is correct.
+
+The Base URL for this API is: [https://api.orange.com/discover/owf-trouble-ticket-management/v1](https://api.orange.com/discover/owf-trouble-ticket/v1)
+
+The documentation below assumes that, whenever you make requests on this API, you are prepending the Base URL to the resource paths defined for this API.
+
+| Base URL | 
+| ---- | 
+|https://api.orange.com/discover/owf-trouble-ticket-management/v1| 
+
+Resources
+---------
+
+A trouble ticket is a record of an issue that is created, tracked, and managed by a trouble ticket management system. 
+![enter image description here](asset:'lZ7ngl7C4RTYTY9r' "enter image title here")
+
+### Trouble Ticket
+
+Below, we have the names and descriptions of the attributes for trouble tickets.
+
+
+| Name      | Type/Format | Description | Example |
+| ---- | ----- | ----------- | --- |
+| id | string | Unique identifier for this particular trouble ticket | '72db2628-73ac-11ec-90d6-0242ac120003' |
+| href | string | Hyperlink, a reference to the trouble ticket entity | "href": "/troubleticket/4aafacbd-11ff-4dc8-b445-305f2215715f” |
+| name | string | Name of the trouble ticket, typically a short description provided by the user who create the ticket. | "name": "Sollicitation sur facture” |
+| description | string | Description of the trouble or issue | "description": "Description du problème” |
+| creationDate | Datetime format | The date on which the trouble ticket was created | "creationDate": "2022-09-28T13:11:00.810Z" |
+| severity | Enum  | The severity (Critical, Major, Medium or Minor) of the issue. Indicate the implication of the issue on the expected functionality e.g. of a system, application, service etc.. | "severity": "Major” |
+| ticketType | Enum | represent a business type of the trouble ticket (Sollicitation, Anomalie, Malfacon) e.g. incident, complain, request | "ticketType": "sollicitation" |
+| Trouble Ticket Specification Ref | troubleTicketSpecification | A trouble ticket specification reference (TroubleTicketSpecificationRef). The specification from which this trouble ticket was instantiated | see below |
+| RelatedParty  | RelatedParty\[\] | A list of related parties (RelatedParty [*]). The related party(ies) that are associated to the ticket. | see below |
+
+
+
+
+### Trouble Ticket Specification
+
+Below the table of the mandatory attributes what ever the type of trouble ticket specification
+
+
+| Name      | Type/Format | Description | Example |
+| ---- | ----- | ----------- | --- |
+| id | string | Unique identifier for this particular trouble ticket specification | '72db2628-73ac-11ec-90d6-0242ac120003' |
+| href | string | Hyperlink, a reference to the trouble ticket specification entity | "href": "/troubleticketspecification/4aafacbd-11ff-4dc8-b445-305f2215715f” |
+| name | string | Name of the trouble ticket specification, typically a short description provided by the resolution system. | "name": "Formulaire du Génie Civil” |
+| @type | string | Class issue type of the trouble ticket specification. Must match one of the ticketType attribute value of the Trouble Ticket resource | "@type": "sollicitation” |
+
+
+### Hub
+
+Below the table of the mandatory attributes of a Hub callback listener
+
+
+| Name      | Type/Format | Description | Example |
+| ---- | ----- | ----------- | --- |
+| id | string | Unique identifier for this particular Hub listener | '100' |
+| callback | string | Hyperlink, a reference to the webhook | "https://webhook.site/#!/a3f6cfcc-23f4-4d7a-a077-c9679036bfb2” |
+| query | string | A filtering query | . |
+
+
+
+
+Sub resources
+-------------
+
+| Resource      | Description |
+| ---- | ------------- |
+| AttachmentRefOrValue | An attachment by value or by reference. An attachment complements the description of an element, for example through a document, a video, a picture. |
+
+
+
+### AttachmentRefOrValue
+
+An attachment by value or by reference. An attachment complements the description of an element, for example through a document, a video, a picture.
+
+| Name      | Type/Format | Description | Example | Mandatory |
+| ---- | ----- | ----------- | --- | -- |
+| id | string | Unique identifier for this particular attachment; should be retrieved from the OWF Attachment API | "ea69228c-600a-4058-8e4e-e13fcc8bf89f" | yes|
+| name | string | The name of the attachment | "facture mai 2023" | no |
+| url | string/uri (Uri) | Remote reference to the content if web-addressable | "http" | no |
+
+
+_Example:_
+
+    "attachment": [
+        {
+            "href": "/attachment/4aafacbd-11ff-4dc8-b445-305f22157157",
+            "id": "4aafacbd-11ff-4dc8-b445-305f22157157",
+            "attachmentType": "",
+            "content": "",
+            "description": "",
+            "mimeType": "",
+            "name": "",
+            "url": "https://",
+            "size": {
+                "amount": null,
+                "units": ""
+            },
+            "validFor": {
+                "endDateTime": null,
+                "startDateTime": null
+            },
+            "@baseType": null,
+            "@schemaLocation": null,
+            "@type": "AttachmentRefOrValue",
+            "@referredType": null
+        }
+    ],
+    
+
+To find information about your attachments or create a new attachment, call the Attachment API (see [OWF Attachment](https://developer.orange.com/apis-preview?id-preview=GDqpRJCYWCKwDbyt&content-type=overview) getting started for more information)
+
+_Example:_
+
+    GET /api/v1/attachment/<attachmentUuId>
+    
+_Header:_
+    
+    {
+        Content-Disposition: attachment; filename="orange logo",
+        Content-Location: /attachment/acb0680c-282c-45d6-a575-8f29e75455c1,
+        Content-Type: image/png,
+        Date: Thu, 02 Mar 2023 18:57:14 GMT
+        X-File-Content-Length: 31856
+    }
+
+    
+
+### Characteristic 
+
+Describes a given characteristic of an object or entity through a name/value pair.
+
+| Name      | Type/Format | Description | Example | Mandatory |
+| ---- | ----- | ----------- | --- | -- |
+| id | string | Unique identifier of the characteristic; should be retrieved from the Trouble Ticket Specification ressource | "ea69228c-600a-4058-8e4e-e13fcc8bf89f" | yes|
+| name | string | The name of the attachment | "facture mai 2023" | no |
+| value | string | Remote reference to the content if web-addressable | "http" | no |
+
+
+_Example:_
+
+    "troubleTicketCharacteristic": [
+        {
+            "id": "13405",
+            "name": "Numéro de commande",
+            "value": "ABC-123-YZ"
+        },
+    ],
+    
+
+To find information about Trouble ticket characterisitcs, call /GET on the Trouble Ticket Specification resource
+
+_Example:_
+
+    GET /api/v1/troubleticketspecification/<TTSpecUuId>
+    [
+        {
+            "id": "bbd6e798-2acb-40c6-a82c-aae338b8ac01",
+            "href": "/troubeticketspecification/bbd6e798-2acb-40c6-a82c-aae338b8ac01",
+            "description": "GC API TT",
+            "name": "GC API TT",
+            "troubleTicketCharacteristics": [
+                {
+                    "id": "13650",
+                    "name": "Numéro Commande",
+                    "maxCardinality": 1,
+                    "minCardinality": 1,
+                    "valueType": "string",
+                    "characteristicValueSpecification": null
+                }
+            ]
+        }
+    ]
+    
+
+### Note 
+
+Describes an extra information about a given entity or exchanges between different parties on the Trouble ticket.
+
+| Name      | Type/Format | Description | Example | Mandatory |
+| ---- | ----- | ----------- | --- | -- |
+| id | string | Identifier of the note within its containing entity | "ea69228c-600a-4058-8e4e-e13fcc8bf89f" | yes|
+| text | string | Text of the note | "Message bien reçu" | yes |
+| author | string | Author of the note | "M. Dupond Dupond" | no |
+
+
+_Example:_
+
+    "note": [
+        {
+            "id": "57343820-93cd-4502-a8c5-db8871eca7c3",
+            "author": "Customer",
+            "date": "2023-01-05T15:36:10.590Z",
+            "text": "Notes de réponse suite à la demande d'information du Chargé de Traitement"
+        }
+    ]
+    
+
+
+
+### RelatedParty
+
+A related party defines party or party role linked to a specific entity.
+Please provide the realtedParty with `role` having `customer` (the customer corresponds to the organization of the operator raising the trouble ticket).
+
+| Name      | Type/Format | Description | Example | Mandatory |
+| ---- | ----- | ----------- | --- | -- |
+| id | string | unique identifier of your organization | "ea69228c-600a-4058-8e4e-e13fcc8bf89f" | yes|
+| name | string | name of your organization | "ABSOLIGHT" | no |
+| role | string | Role played by the related party; shoud be `customer` | "customer" | yes |
+| @referredType | string | The actual type of the target instance when needed for disambiguation; shoud be `organization` | "organization" | yes |
+
+
+_Example:_
+
+    "relatedParty": [
+        {
+            "id": "ea69228c-600a-4058-8e4e-e13fcc8bf89f",
+            "name": "ABSOLIGHT",
+            "role": "customer",
+            "@referredType": "organization"
+        }
+    ],
+    
+
+To find information about your organization call the Party management API (see Party management getting started for more information)
+
+_Request:_
+
+    GET /api/v1/organization/<organizationId>
+
+_Response:_
+    
+
+    {
+        "id": "ea69228c-600a-4058-8e4e-e13fcc8bf89f",
+        "isHeadOffice": true,
+        "isLegalEntity": true,
+        "name": "ABSOLIGHT",
+        "organizationType": "COMPANY",
+        "tradingName": "ABSOLIGHT",
+        "contactMedium": [],
+        "organizationIdentification": [
+            {
+                "identificationId": "00353831",
+                "identificationType": "RCE"
+            },
+            {
+                "identificationId": "418565404",
+                "identificationType": "SIREN"
+            }
+        ],
+        "@type": "Organization",
+        "href": "/api/v1/organization/ea69228c-600a-4058-8e4e-e13fcc8bf89f"
+    }
+    
+
+
+### StatusChange 
+
+Holds the status notification reasons and associated date the status changed, populated by the server.
+
+| Name      | Type/Format | Description | Example | Mandatory |
+| ---- | ----- | ----------- | --- | -- |
+| id | string | Identifier of the change within its containing entity | "ea69228c-600a-4058-8e4e-e13fcc8bf89f" | yes|
+| status | string | The status of the trouble ticket | "acknowledged" | yes |
+| changeReason | string | The reason why the status changed | "demande recevable" | yes |
+| changeDate | date time (DateTime) | The date and time the status changed | "2022-12-21T15:13:14.172Z" | yes |
+
+
+_Example:_
+
+    "statusChange": [
+        {
+            "id": "b6339b30-8251-4000-b1a8-3e8abaa18da2",
+            "href": "/statusChange/b6339b30-8251-4000-b1a8-3e8abaa18da2",
+            "changeDate": "2022-12-21T15:13:14.172Z",
+            "changeReason": "La solution a été apportée au problème",
+            "status": "closed",
+        }
+    ],
+    
+    
+
+
+### ChannelRef 
+
+The channel to which the resource reference to. e.g. channel for selling product offerings, channel for opening a trouble ticket etc.., populated by the server.
+
+| Name      | Type/Format | Description | Example | Mandatory |
+| ---- | ----- | ----------- | --- | -- |
+| id | string | unique identifier | "ea69228c-600a-4058-8e4e-e13fcc8bf89f" | yes|
+| name | string | Name of the channel | "API" | yes |
+
+
+_Example:_
+
+    "channel": {
+        "id": "1",
+        "name": "self service/API",
+        "@type": "ChannelRef"
+    },
+    
+
+
+### TroubleTicketSpecificationRef 
+
+Reference to a TroubleTicketSpecification object. Should be retrieved from the Trouble Ticket Specification ressource
+
+| Name      | Type/Format | Description | Example | Mandatory |
+| ---- | ----- | ----------- | --- | -- |
+| id | string | Unique identifier | "ea69228c-600a-4058-8e4e-e13fcc8bf89f" | yes|
+| name | string | The name of the related entity | "GC TT" | yes |
+
+
+_Example:_
+
+    "troubleTicketSpecification": {
+        "id": "02810fa3-718a-414d-a0ed-fc65b28ba31b",
+        "href": "/troubleticketspecification/02810fa3-718a-414d-a0ed-fc65b28ba31b",
+        "name": "Reclamation et Recouvrement"
+    },
+    
+To find information about Trouble ticket characterisitcs, call /GET on the Trouble Ticket Specification resource
+
+_Request:_
+
+    GET /api/v1/troubleticketspecification/<TTSpecUuId>
+
+_Response:_
+
+    [
+        {
+            "id": "bbd6e798-2acb-40c6-a82c-aae338b8ac01",
+            "href": "/troubeticketspecification/bbd6e798-2acb-40c6-a82c-aae338b8ac01",
+            "description": "Reclamation et Recouvrement des factures",
+            "name": "Reclamation et Recouvrement"
+        }
+    ]
+
+
+
+
+Trouble Ticket life cycle
+-------------------------
+
+Each Trouble Ticket follows a unique worklflow (status machine) with different statuss. See TMF documentation or below for more informations.
+
+![enter image description here](asset:'tbymg1BZtZFeNExk' "enter image title here")
+
+> **Warning:** The trouble ticket api executes the trouble ticket asynchronously. 
+When the trouble ticket is POST you get a response with the status `AKNOWLEGDED`. 
+When the trouble ticket is being executed, it changes to the `INPROGRESS` status.
+When the trouble ticket could be resolved without anomaly, it will have the `RESOLVED` status and a note or additional attachment will be added on it, then the `CLOSED` status if no additional action is expected and no further action will be authorized on the Trouble ticket.
+> If a problem occurs during the processing of this one, its status will be `REJECTED` if it fails the business validation, `CANCELLED` if the issue can't be resolved or has been resolved out of the scope of the ticket, `HELD` if the process is blocked due to an issue, `PENDING` if the process needs extra information to continue, and error notes will be added together with status change reasons to indicate the problems encountered or expected extra information.
+> 
+> **In the current status, it is only possible to PATCH the status of the trouble ticket. If an error has occurred on your trouble ticket, you must create a new one via the POST method**
+> 
+> **If you obtain a trouble ticket with the InProgress status and error note, you are on a partial trouble ticket (because some mandatories information are not transmitted, but a price could be delivery)**
+
+
+Query Resources patterns
+------------------------
+
+### Query Resources with attribute selection
+
+In every GET request, you can add a **fields** parameters to filter the response body with a subset of the attributes.
+
+_Request:_
+
+    GET https://api.orange.com/discover/owf-trouble-ticket-management/v1/troubleticket?fields=description,creationDate
+
+
+_Response:_ 
+
+    [
+        {
+            "description": "Trouble Ticket Sollicitation",
+            "href": null,
+            "id": "e7dee14c-cd85-495a-9931-ef3c06f2559b",
+            "creationDate": "2021-07-22T11:27:22.000+02:00"
+        },
+        {
+            "description": "Trouble Ticket Sollicitation",
+            "href": null,
+            "id": "37cf411f-5258-409a-9703-66cf965c9f43",
+            "creationDate": "2021-07-22T11:27:29.000+02:00"
+        }
+    ]
+    
+
+For better response time, only request fields you really need. Especially when requesting on list endpoints.
+
+**Note that attributes `id` and `href` are always returned, even if `fields=none`.**
+
+### Query Resources with attribute filtering
+
+According to TMF630 REST API Design Guidelines, you can filter data by specifying attributes in the `querystring`. However, first and second level attributes can be used as a filter criteria. Herein, the exhaustive list of available parameters with the associated allowed operators.
+
+
+The operations available for the attributes (date, integer and string) are:
+
+*   `=` or `.eq=` : equal to
+*   `>=` or `.gte=` : greater than or equal to
+*   `>` or `.gt=` : strictly greater than
+*   `<=` or `.lte=` : lower than or equal to
+*   `<` or `.lt=` : strictly lower than
+*   `<>` or `.ne=` : Not equal
+
+_Request:_
+
+    GET https://api.orange.com/discover/owf-trouble-ticket-management/v1/troubleticket?fields=status&status=InProgress&creationDate.gt=2013-04-20
+
+_Response:_
+    
+
+    [
+        {
+            "href": "/api/v1/troubleticket/2a89ed67-5cf8-429d-9a3d-5153d481ff55",
+            "id": "2a89ed67-5cf8-429d-9a3d-5153d481ff55",
+            "status": "InProgress"
+        },
+        {
+            "href": "/api/v1/troubleticket/7f8bb1aa-da62-41e6-be85-38b6f42827ae",
+            "id": "7f8bb1aa-da62-41e6-be85-38b6f42827ae",
+            "status": "InProgress"
+        },
+        {
+            "href": "/api/v1/troubleticket/0f9e6ecd-2bee-4448-b0cb-c6cdb29bccb7",
+            "id": "0f9e6ecd-2bee-4448-b0cb-c6cdb29bccb7",
+            "status": "InProgress"
+        }
+    ]
+    
+
+
+### Query Resources with iterators
+
+When requesting collections, you should set pagination query parameters.
+
+*   `offset`: Requested index for start of resources to be provided in response requested by client.
+*   `limit`: Requested number of resources to be provided in response requested by client.
+
+After each request, explore the http headers to retrieve the number of results
+
+*   `X-Result-Count`: The number of matching resources in the JSON response.
+*   `X-Total-Count`: The total number of matching resources.
+
+If `X-Total-Count` is bigger than `X-Result-Count`, you need to request again by incrementing the `offset` query parameter with the `X-Result-Count` value. You can limit the number of result per page with `limit`.
+
+**Note that you can't request more result per page than the default. Be sure to read the header `X-Result-Count`.**
+
+For example, to retrieve only the second element in the list
+
+    GET https://api.orange.com/discover/owf-trouble-ticket-management/v1/troubleticket?fields=none&limit=1&offset=1
+    
+
+    [
+        {
+            "id": "9240353c-cd38-447c-9437-9d4aa229d5ff",
+            "href": "/api/v1/troubleticket/9240353c-cd38-447c-9437-9d4aa229d5ff"
+        }
+    ]
+    
+
+`Accept-Range` is ignored.
+
+### Sorting
+
+The query parameter **sort** is used to order resources to be provided in response (used `-` if you want descending).
+
+_Request:_
+
+    GET https://api.orange.com/discover/owf-trouble-ticket-management/v1/troubleticket?fields=status&sort=-creationDate
+
+_Response:_
+    
+
+    [
+        {
+            "href": null,
+            "id": "7f8bb1aa-da62-41e6-be85-38b6f42827ae",
+            "status": "InProgress"
+        },
+        {
+            "href": null,
+            "id": "0f9e6ecd-2bee-4448-b0cb-c6cdb29bccb7",
+            "status": "InProgress"
+        }
+    ]
+
+### Contains : `* = *{text}* `
+
+The **contains** parameter in the query is used to find a word in the description or note in the response. 
+
+_Request:_
+
+    GET https://api.orange.com/discover/owf-trouble-ticket-management/v1/troubleticket?fields=description&description*=*verifier*
+
+_Response:_
+    
+
+    [
+        {
+            "description": "The description of a ticket by DSI \n afin de verifier que tout fonctionne à nouveau",
+            "id": "5f2ca316-2025-459c-8cae-49924bc64163",
+            "href": "/api/v1/troubleticket/5f2ca316-2025-459c-8cae-49924bc64163"
+        }
+    ]
+
+
+### Start with :` * = {text}*`
+
+_Request:_
+
+    GET https://api.orange.com/discover/owf-trouble-ticket-management/v1/troubleticket?fields=description&description*=THE*
+
+_Response:_
+    
+
+    [
+        {
+            "description": "The description of a ticket by DSI \n afin de verifier que tout fonctionne à nouveau",
+            "id": "5f2ca316-2025-459c-8cae-49924bc64163",
+            "href": "/api/v1/troubleticket/5f2ca316-2025-459c-8cae-49924bc64163"
+        },
+        {
+            "description": "The description of a ticket by DSI ! ",
+            "id": "34980b32-6a84-4155-afd8-20665fbce5d4",
+            "href": "/api/v1/troubleticket/34980b32-6a84-4155-afd8-20665fbce5d4"
+        },
+    ]
+
+### Ends with : ` * = *{text}`
+
+_Request:_
+
+    GET https://api.orange.com/discover/owf-trouble-ticket-management/v1/troubleticket?fields=description&description*=*nouveau
+
+_Response:_
+    
+
+    [
+        {
+            "description": "The description of a ticket by DSI \n afin de verifier que tout fonctionne à nouveau",
+            "id": "5f2ca316-2025-459c-8cae-49924bc64163",
+            "href": "/api/v1/troubleticket/5f2ca316-2025-459c-8cae-49924bc64163"
+        }
+    ]
+
+
+### Example of filter on level 2 : `note.text, note.id, attachment.creationDate`, [...]
+
+_Request:_
+
+    GET https://api.orange.com/discover/owf-trouble-ticket-management/v1/troubleticket?fields=note&note.text*=*Trouble Ticket*
+
+_Response:_
+    
+
+    [
+        {
+            "note": [
+                {
+                    "id": "1c14d2db-9a1c-4fd8-8bde-24cb7084d038",
+                    "author": "Customer",
+                    "date": "2024-03-05T09:00:55.619Z",
+                    "text": "commentaire 1 from Trouble Ticket",
+                    "@baseType": null,
+                    "@schemaLocation": null,
+                    "@type": "Note"
+                },
+                {
+                    "id": "8acd2a6b-3604-4ab5-9570-a59e992490e2",
+                    "author": "Customer",
+                    "date": "2024-03-05T09:01:39.420Z",
+                    "text": "commentaire 2 from Trouble Ticket",
+                    "@baseType": null,
+                    "@schemaLocation": null,
+                    "@type": "Note"
+                }
+            ],
+            "id": "5f2ca316-2025-459c-8cae-49924bc64163",
+            "href": "/api/v1/troubleticket/5f2ca316-2025-459c-8cae-49924bc64163"
+        }
+    ]
+
+
+
+
+Errors
+------
+
+> Failure to code a proper management of the error responses in your application may affect its resilience. Access to the API may be revoked if your application generates too many mishandled errors.
+> 
+> Your application must parse the returned HTTP response to check if an error is returned instead of a 200 OK. Orange APIs use appropriate HTTP status codes to indicate any request processing error, providing detailed information about the underlying fault. This helps you provide better feedback to your users and implement failure recovery mechanisms in your application.
+> 
+> For details on the main error codes, response format, tips and troubleshooting, [see our Handling API errors guide](https://developer.orange.com/tech_guide/orange-apis-error-handling/)
+
+### Errors 401
+
+If you get a status code `401` with the error code `42` (such as below), then you have to request a new `access token`.
+
+    HTTP/1.1 401 Unauthorized
+    Content-Type: application/json
+    {
+      "code": 42,
+      "message": "Expired credentials",
+      "description": "The requested service needs credentials, and the ones provided
+      were out-of-date."
+    }
+    
+
+#### Token lifetime
+
+> *   Each `access_token` has a lifetime validity period. This validity period may change overtime to comply with security rules.
+> *   The token server has a maximum hourly quota per client application to prevent from misuse. Therefore, DON'T request an `access_token` each time you invoke the service API. DON'T hard-code a validity duration in your application. Instead, your application must parse the returned status code and error code to check if it needs to request a new `access token`.
+
+For other `401` errors: [check that you provide the right `Authorization` header with the right `Bearer`](https://developer.orange.com/tech_guide/2-legged-oauth-2-v3/)
+
+### Errors 400
+
+In case of invalid request to the API, you will receive a `400` error code with detailed information in the body message, such as:
+
+    HTTP/1.1 400 Bad Request
+    {
+      "code": 25,
+      "description": "Missing header",
+      "message": "...."
+    }
+    
+
+### Errors 404
+
+If you try to access to a non-existent resource using the following endpoint for example : `GET trouble ticket/{id}`:
+
+    HTTP/1.1 404 Not Found
+    {
+        "code": "60",
+        "message": "No entity found with ID 'sdfsd'!",
+        "reason": "Resource not found",
+        "@type": "Error"
+    }
+    
+
+### Others
+
+Below you can find a table with the http codes and their respective functional codes and messages :
+
+| HTTP error code      | Quotify code error | error message |
+| --- | ----- | ----------- |
+|400	|20	|Invalid URL parameter value
+|400	|21	|Missing body
+|400	|22	|Invalid body
+|400	|23	|Missing body field
+|400	|24	|Invalid body field
+|400	|25	|Missing header
+|400	|26	|Invalid header value
+|400	|27	|Missing query-string parameter
+|400	|28	|Invalid query-string parameter value
+|401	|40	|Missing credentials
+|401	|41	|Invalid credentials
+|401	|42	|Expired credentials
+|403	|50	|Access denied
+|403	|51	|Forbidden requester
+|403	|52	|Forbidden user
+|403	|53	|Too many requests
+|404	|60	|Resource not found
+|405	|61	|Method not allowed
+|406	|62	|Not acceptable
+|408	|63	|Request time-out
+|409	|69	|Conflict
+|411	|64	|Length required
+|412	|65	|Precondition failed
+|413	|66	|Request entity too large
+|414	|67	|Request-URI too long
+|415	|68	|Unsupported Media Type
+|429	|53	|Too many requests
+|500	|1	|Internal Server Error
+|502	|1	|Internal error
+|502	|3	|Bad gateway
+|503	|5	|The service is temporarily unavailable
+|503	|6	|Orange API is over capacity,  over capacity, retry later ! [.](asset:'lWG4EeFnE6VneCZQ')
+
+
+
+Use cases
+---------
+
+1\. I want to retrieve specifications.
+-----------------------------------------------------------
+To be able to list all trouble ticket specifications. Results Can be subjected to filtering, pagination, selective projection, and sorting. Attribute selection is enabled for all first level attributes. 
+By default, Id and href are always projected in the resulting output.
+
+_Request:_
+    
+    GET : https://api.orange.com/discover/owf-trouble-ticket-management/v1/troubleticketspecification/
+
+
+
+_Response:_
+
+    [
+        {
+            "id": "string",
+            "href": "string",
+            "description": "string",
+            "lastUpdate": "2025-02-21T10:44:08.282Z",
+            "name": "string",
+            "status": "inDesign",
+            "version": "string",
+            "attachment": [
+            {
+                "id": "4aafacbd-11ff-4dc8-b445-305f2215715f",
+                "href": "http://host/Attachment/4aafacbd-11ff-4dc8-b445-305f2215715f",
+                "attachmentType": "video",
+                "content": "string",
+                "description": "Photograph of the Product",
+                "mimeType": "video/mp4",
+                "name": "iPhone 14 video",
+                "url": "http://host/Content/4aafacbd-11ff-4dc8-b445-305f2215715f",
+                "size": {
+                "amount": 1,
+                "units": "string"
+                },
+                "validFor": {
+                "endDateTime": "1985-04-12T23:20:50.52Z",
+                "startDateTime": "1985-04-12T23:20:50.52Z"
+                },
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string",
+                "@referredType": "string"
+            }
+            ],
+            "partyRoleSpecification": [
+            {
+                "id": "string",
+                "href": "string",
+                "name": "string",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string",
+                "@referredType": "string"
+            }
+            ],
+            "relatedEntitySpecification": [
+            {
+                "id": "string",
+                "href": "string",
+                "name": "string",
+                "role": "string",
+                "version": "string",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string",
+                "@referredType": "string"
+            }
+            ],
+            "relatedParty": [
+            {
+                "id": "string",
+                "href": "string",
+                "name": "string",
+                "role": "string",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string",
+                "@referredType": "string"
+            }
+            ],
+            "troubleTicketSpecCharacteristic": [
+            {
+                "id": "string",
+                "configurable": true,
+                "description": "string",
+                "extensible": true,
+                "isUnique": true,
+                "maxCardinality": 0,
+                "minCardinality": 0,
+                "name": "string",
+                "regex": "string",
+                "valueType": "string",
+                "charSpecRelationship": [
+                {
+                    "characteristicSpecificationId": "string",
+                    "name": "string",
+                    "parentSpecificationHref": "string",
+                    "parentSpecificationId": "string",
+                    "relationshipType": "string",
+                    "validFor": {
+                    "endDateTime": "1985-04-12T23:20:50.52Z",
+                    "startDateTime": "1985-04-12T23:20:50.52Z"
+                    },
+                    "@baseType": "string",
+                    "@schemaLocation": "string",
+                    "@type": "string"
+                }
+                ],
+                "characteristicValueSpecification": [
+                {
+                    "isDefault": true,
+                    "rangeInterval": "string",
+                    "regex": "string",
+                    "unitOfMeasure": "string",
+                    "valueFrom": 0,
+                    "valueTo": 0,
+                    "valueType": "string",
+                    "validFor": {
+                    "endDateTime": "1985-04-12T23:20:50.52Z",
+                    "startDateTime": "1985-04-12T23:20:50.52Z"
+                    },
+                    "value": "string",
+                    "@baseType": "string",
+                    "@schemaLocation": "string",
+                    "@type": "string"
+                }
+                ],
+                "validFor": {
+                "endDateTime": "1985-04-12T23:20:50.52Z",
+                "startDateTime": "1985-04-12T23:20:50.52Z"
+                },
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string",
+                "@valueSchemaLocation": "string"
+            }
+            ],
+            "troubleTicketSpecRelationship": [
+            {
+                "id": "string",
+                "href": "string",
+                "name": "string",
+                "relationshipType": "string",
+                "validFor": {
+                "endDateTime": "1985-04-12T23:20:50.52Z",
+                "startDateTime": "1985-04-12T23:20:50.52Z"
+                },
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string",
+                "@referredType": "string"
+            }
+            ],
+            "validFor": {
+            "endDateTime": "1985-04-12T23:20:50.52Z",
+            "startDateTime": "1985-04-12T23:20:50.52Z"
+            },
+            "@baseType": "string",
+            "@schemaLocation": "string",
+            "@type": "string"
+        }
+    ]
+
+
+2\. I want to create a trouble ticket.
+-----------------------------------------------------------
+
+It is imperative to include an existing TroubleTicketSpecification, where the `id` and `name` attributes within the troubleticketspecification fields are required. This ensures that the specification being referenced already exists. By following these guidelines, you can successfully create a trouble ticket with the appropriate specification.
+
+_Request:_
+    
+    POST https://api.orange.com/discover/owf-trouble-ticket-management/v1/troubleticket/
+
+_Example:_
+
+    [
+        {
+            "creationDate": "2025-02-21T10:45:46.514Z",
+            "description": "string",
+            "expectedResolutionDate": "2025-02-21T10:45:46.514Z",
+            "externalId": "string",
+            "lastUpdate": "2025-02-21T10:45:46.514Z",
+            "name": "string",
+            "priority": "string",
+            "requestedResolutionDate": "2025-02-21T10:45:46.514Z",
+            "resolutionDate": "2025-02-21T10:45:46.514Z",
+            "severity": "string",
+            "statusChangeDate": "2025-02-21T10:45:46.514Z",
+            "statusChangeReason": "string",
+            "ticketType": "string",
+            "attachment": [
+                {
+                "id": "4aafacbd-11ff-4dc8-b445-305f2215715f",
+                "href": "http://host/Attachment/4aafacbd-11ff-4dc8-b445-305f2215715f",
+                "attachmentType": "video",
+                "content": "string",
+                "description": "Photograph of the Product",
+                "mimeType": "video/mp4",
+                "name": "iPhone 14 video",
+                "url": "http://host/Content/4aafacbd-11ff-4dc8-b445-305f2215715f",
+                "size": {
+                    "amount": 1,
+                    "units": "string"
+                },
+                "validFor": {
+                    "endDateTime": "1985-04-12T23:20:50.52Z",
+                    "startDateTime": "1985-04-12T23:20:50.52Z"
+                },
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string",
+                "@referredType": "string"
+                }
+            ],
+            "channel": {
+                "id": "string",
+                "href": "string",
+                "name": "string",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string",
+                "@referredType": "string"
+            },
+            "note": [
+                {
+                "id": "[\"afa9-3d90aaa8da0f\"]",
+                "author": "[\"Mr. N. Bene\"]",
+                "date": "2025-02-21T10:45:46.514Z",
+                "text": "[\"This is important\"]",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string"
+                }
+            ],
+            "relatedEntity": [
+                {
+                "id": "string",
+                "href": "string",
+                "name": "string",
+                "role": "string",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string",
+                "@referredType": "string"
+                }
+            ],
+            "relatedParty": [
+                {
+                "id": "string",
+                "href": "string",
+                "name": "string",
+                "role": "string",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string",
+                "@referredType": "string"
+                }
+            ],
+            "status": "acknowledged",
+            "statusChange": [
+                {
+                "id": "string",
+                "href": "string",
+                "changeDate": "2025-02-21T10:45:46.514Z",
+                "changeReason": "string",
+                "status": "string",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string"
+                }
+            ],
+            "troubleTicketCharacteristic": [
+                {
+                "id": "string",
+                "name": "string",
+                "valueType": "string",
+                "characteristicRelationship": [
+                    {
+                    "id": "string",
+                    "href": "string",
+                    "relationshipType": "string",
+                    "@baseType": "string",
+                    "@schemaLocation": "string",
+                    "@type": "string"
+                    }
+                ],
+                "value": "string",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string"
+                }
+            ],
+            "troubleTicketRelationship": [
+                {
+                "id": "string",
+                "href": "string",
+                "name": "string",
+                "relationshipType": "string",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string"
+                }
+            ],
+            "troubleTicketSpecification": {
+                "id": "string",
+                "href": "string",
+                "name": "string",
+                "version": "string",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string",
+                "@referredType": "string"
+            },
+            "@baseType": "string",
+            "@schemaLocation": "string",
+            "@type": "string"
+        }
+    ]
+
+
+-----------------------------------------------------------
+
+3\. I want to create a trouble ticket with an attachment.
+-----------------------------------------------------------
+To be able to create a trouble ticket with an attachment, you need to send a `POST` request.
+`id of attachment` is mandatory, and there is a check whether the Attachment UUID exists in the Attachment Database and whether the client is a relatedparty of the item or not.
+
+_Request:_
+
+    POST https://api.orange.com/discover/owf-trouble-ticket-management/v1/troubleticket/
+
+
+![enter image description here](asset:'5Eja8m9DTI1oExUa' "enter image title here")
+
+| Step | Description |
+| ---- | ----- | 
+| `1`| Set the request method to `POST` in the dropdown|
+| `2`| Add in the body the `id` of `attachment` you want to create with your trouble ticket| 
+| `3`| Finally, click `Send`|
+| `4`| See the attachment in the `body` of the response|
+
+
+4\. I want to retrieve a trouble ticket by `id`.
+-----------------------------------------------------------
+To retrieve a trouble ticket, you must send a method of Type `GET`
+
+_Example:_
+
+    GET https://api.orange.com/discover/owf-trouble-ticket-management/v1/troubleticket/{uuid}
+
+* `uuid of trouble ticket` is  mandatory 
+
+_Response:_
+
+    [
+        {
+            "id": "string",
+            "href": "string",
+            "creationDate": "2025-02-21T10:51:14.623Z",
+            "description": "string",
+            "expectedResolutionDate": "2025-02-21T10:51:14.623Z",
+            "externalId": "string",
+            "lastUpdate": "2025-02-21T10:51:14.623Z",
+            "name": "string",
+            "priority": "string",
+            "requestedResolutionDate": "2025-02-21T10:51:14.623Z",
+            "resolutionDate": "2025-02-21T10:51:14.623Z",
+            "severity": "string",
+            "statusChangeDate": "2025-02-21T10:51:14.623Z",
+            "statusChangeReason": "string",
+            "ticketType": "string",
+            "attachment": [
+                {
+                "id": "4aafacbd-11ff-4dc8-b445-305f2215715f",
+                "href": "http://host/Attachment/4aafacbd-11ff-4dc8-b445-305f2215715f",
+                "attachmentType": "video",
+                "content": "string",
+                "description": "Photograph of the Product",
+                "mimeType": "video/mp4",
+                "name": "iPhone 14 video",
+                "url": "http://host/Content/4aafacbd-11ff-4dc8-b445-305f2215715f",
+                "size": {
+                    "amount": 1,
+                    "units": "string"
+                },
+                "validFor": {
+                    "endDateTime": "1985-04-12T23:20:50.52Z",
+                    "startDateTime": "1985-04-12T23:20:50.52Z"
+                },
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string",
+                "@referredType": "string"
+                }
+            ],
+            "channel": {
+                "id": "string",
+                "href": "string",
+                "name": "string",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string",
+                "@referredType": "string"
+            },
+            "note": [
+                {
+                "id": "[\"afa9-3d90aaa8da0f\"]",
+                "author": "[\"Mr. N. Bene\"]",
+                "date": "2025-02-21T10:51:14.623Z",
+                "text": "[\"This is important\"]",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string"
+                }
+            ],
+            "relatedEntity": [
+                {
+                "id": "string",
+                "href": "string",
+                "name": "string",
+                "role": "string",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string",
+                "@referredType": "string"
+                }
+            ],
+            "relatedParty": [
+                {
+                "id": "string",
+                "href": "string",
+                "name": "string",
+                "role": "string",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string",
+                "@referredType": "string"
+                }
+            ],
+            "status": "acknowledged",
+            "statusChange": [
+                {
+                "id": "string",
+                "href": "string",
+                "changeDate": "2025-02-21T10:51:14.623Z",
+                "changeReason": "string",
+                "status": "string",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string"
+                }
+            ],
+            "troubleTicketCharacteristic": [
+                {
+                "id": "string",
+                "name": "string",
+                "valueType": "string",
+                "characteristicRelationship": [
+                    {
+                    "id": "string",
+                    "href": "string",
+                    "relationshipType": "string",
+                    "@baseType": "string",
+                    "@schemaLocation": "string",
+                    "@type": "string"
+                    }
+                ],
+                "value": "string",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string"
+                }
+            ],
+            "troubleTicketRelationship": [
+                {
+                "id": "string",
+                "href": "string",
+                "name": "string",
+                "relationshipType": "string",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string"
+                }
+            ],
+            "troubleTicketSpecification": {
+                "id": "string",
+                "href": "string",
+                "name": "string",
+                "version": "string",
+                "@baseType": "string",
+                "@schemaLocation": "string",
+                "@type": "string",
+                "@referredType": "string"
+            },
+            "@baseType": "string",
+            "@schemaLocation": "string",
+            "@type": "string"
+        }                
+    ]
+
+
+5\. I want to retrieve all trouble tickets (with filtering and sorting).
+--------------------------------------------------------------------------
+To retrieve all trouble tickets, you must send a method of Type `GET`  
+
+_Example:_ 
+    
+    GET https://api.orange.com/discover/owf-trouble-ticket-management/v1/troubleticket/ 
+
+## Important 
+
+* This operation retrieves a list of TroubleTicket entities that belong to my organization. Attribute selection, filtering, is enabled for `first and second level attributes`.
+* `Sorting` can be applied both ascendecally and descendally, default sort attribute is : `lastUpdate`
+* Sortable fields = [ creationDate
+  - expectedResolutionDate /-expectedResolutionDate
+  - lastUpdate /-lastUpdate
+  - requestedResolutionDate /-requestedResolutionDate
+  - resolutionDate /-resolutionDate
+  - statusChangeDate /-resolutionDate] 
+
+
+_Example:_ 
+    
+    GET https://api.orange.com/discover/owf-trouble-ticket-management/v1/troubleticket?fields=creationDate&sort=creationDate
+
+_Response:_ 
+
+    [
+        {
+            "id": "70295483-5c9d-4a22-8829-037a39cfaf47",
+            "href": "/api/v1/troubleticket/70295483-5c9d-4a22-8829-037a39cfaf47",
+            "creationDate": "2023-05-17T12:06:01.187Z"
+        },
+        {
+            "id": "33f50c49-7d34-47d4-9b60-0435e8ab6970",
+            "href": "/api/v1/troubleticket/33f50c49-7d34-47d4-9b60-0435e8ab6970",
+            "creationDate": "2023-05-17T12:56:55.724Z"
+        },
+        {
+            "id": "ed871589-f6de-407a-84e2-a799419e45bb",
+            "href": "/api/v1/troubleticket/ed871589-f6de-407a-84e2-a799419e45bb",
+            "creationDate": "2023-05-17T13:35:24.168Z"
+        },
+        ...
+    ]
+
+6\. I want to update A trouble ticket with a note.
+--------------------------------------------------- 
+To update a trouble ticket with a note, you need to send a a request using a `PATCH` method 
+
+* `id of trouble ticket` is mandatory 
+
+_Example:_ 
+
+![enter image description here](asset:'GUd2Lp6UX0M9h0X7' "enter image title here")
+| Step | Description |
+| ---- | ----- | 
+| `1`| Set the request method to `PATCH` in the dropdown|
+| `2`| Define the URL of your endpoint and add the `Id` of the trouble ticket on which you want to add a `note` using the path parameter "`/`"| 
+| `3`| Add in the body the `note` you want to include in your trouble ticket|
+| `4`| Finally, click `Send`|
+| `5`| See the note in the `body` of the response| 
+
+## Important 
+
+* You can add as many notes as you want, they will all be stacked up.
+* You can PATCH Attachment and Note in the same payload (simultaneously)
+* The only way to send a note is in the patch
+
+
+7\. I want to update a trouble ticket with an attachment.
+-----------------------------------------------------------
+
+To update a trouble ticket with a attachment, you need to send a a request using a `PATCH` method 
+
+* `id of trouble ticket` is mandatory 
+* `id of attachment` is mandatory 
+
+_Example:_ 
+    GET https://api.orange.com/discover/owf-trouble-ticket-management/v1/troubleticket/a26ced49-0421-4825-a9e6-9e53f57ac35d
+
+
+
+![enter image description here](asset:'hZPQ80428SP6H12h' "enter image title here")
+
+| Step | Description |
+| ---- | ----- | 
+| `1`| Set the request method to `PATCH` in the dropdown|
+| `2`| Define the URL of your endpoint and add the `Id` of the trouble ticket on which you want to add a `attachment` using the path parameter "`/`"| 
+| `3`| Add the `ID of the attachment` you want to include in the trouble ticket to the body|
+| `4`| Finally, click `Send`|
+| `5`| See the attachment in the `body` of the response| 
+
+## Notifications
+#### Register listener 
+The registration of a listener creates a HUB resource unique to the listener, like a subscription.
+The HUB is created using a POST request on /api/hub. It is bound to the API and the related party who creates it.
+The body of the request defines the callback URL used by the service instance to deliver the notifications (https is required).
+A query expression can be provided to filter the kind of notification to receive and/or to refine the content of its payload.
+This query expression is the same as the one used to `query resources`
+
+8\. I want to subscribe to notifications /Hub.
+---------------------------------------------- 
+To be able to subscribe to the listener and receive all notifications, you need to send a request of type `POST` 
+
+_Request:_
+    
+     POST https://api.orange.com/discover/owf-trouble-ticket-management/v1/hub/
+
+In the body, please insert the `callback URL` to which all events will be sent.
+
+_Example:_
+
+    [
+        {
+           "callback": "https://listener.com",
+           "query": ""
+        }
+    ]
+
+* N.B. The scope `readonly` must be used to call the hub endpoint.
+### HMAC private key & signature
+In the response of the POST request sent to register a listener, an HMAC private key is supplied.
+_Response:_
+
+    {
+        "id": "13",
+        "callback": "https://my.listener.org",
+        "hmacSecretKey": "f0a78e501a6515269d65c8a4f9fb7140",
+        "hmacSecretKeyExpirationDate": "2025-02-28T16:35:30.825+01:00"
+    }
+
+This private key shall be kept somewhere to reuse it later for signature comparison.
+If the expiration date of the private key has not already passed, the notifications sent to the callback URL will contain an HMAC signature in the digest header.
+
+    POST https://my.listener.org
+    content-type: application/json
+    x-correlation-id: 24ce0bed10a06114478d01ebcb9656b3
+    x-request-date: 2025-01-28T15:53:09.756Z
+    digest: HMAC-SHA256 SignedHeaders=x-correlation-id;x-request-date&Signature=69cc6d3b38d1b1e07427c4d052546ccb60b7def5e6b040b9085c9676ea0da2b5
+
+    {
+        ...notification payload...
+    }
+
+
+In order to verify the origin of the notification received, the private key can be used to compute the HMAC signature related to the values found in the **x-correlation-id** and the **x-request-date** headers.
+The value of the signature must comply with the one found in the headers as the private key is only known by the service instance and the subscriber.
+
+In the given example, the value **24ce0bed10a06114478d01ebcb9656b32025-01-28T15:53:09.756Z** calculated with the secret key **f0a78e501a6515269d65c8a4f9fb7140** and the `SHA256` algorithm is **69cc6d3b38d1b1e07427c4d052546ccb60b7def5e6b040b9085c9676ea0da2b5**.
+
+### Renew HMAC private key
+9\. I want to renew a private key
+---------------------------------------------- 
+To refresh the private key linked to a HUB, a POST request with the id of the HUB can be sent (no request body required).
+The new private key is displayed in the returned response with a new expiration date.
+
+_Request:_
+    
+     POST https://api.orange.com/discover/owf-trouble-ticket-management/v1/hub/{id}
+
+_Response:_
+
+    [
+        {
+            "id": "13",
+            "callback": "https://my.listener.org",
+            "hmacSecretKey": "f0a78e501a6515269d65c8a4f9fb7140",
+            "hmacSecretKeyExpirationDate": "2025-03-28T16:35:30.825+01:00"
+        }
+    ]
+
+### List registered listeners
+
+10\. I want to list all registered listeners
+---------------------------------------------- 
+
+The GET request on the /api/hub provides the HUB resources registered previously.
+
+_Request:_
+    
+     GET https://api.orange.com/discover/owf-trouble-ticket-management/v1/hub/
+
+
+_Response:_
+
+    [
+        {
+            "id": "12",
+            "callback": "https://listener.com",
+            "query": "eventType=ProductCreateEvent&fields=product.id",
+            "hmacSecretKeyExpirationDate": "2025-02-14T16:25:09.000+01:00"
+        },
+        {
+            "id":"42",
+            "callback": "https://another.listener.com",
+            "hmacSecretKeyExpirationDate": "2025-12-31T16:25:09.000+01:00"
+        }
+    ]
+
+
+The id can be used to unregister the listener as described later.
+
+The HMAC secret key is not displayed, but rather its expiration date.
+
+* Important : In the `query`, you can filter the notifications you want to receive.
+
+_Example:_ 
+
+    {
+        "callback": "https://webhook.site/40d22b09-1b0b-4fb1-a3a2-217f620b5465",
+        "query" : "eventType = TroubleTicketCreateEvent"
+    }
+
+### Notifications available
+The different events you can receive are:
+
+* `TroubleTicketCreateEvent`: When you receive this type of event, it means that the ticket has been created.
+
+* `TroubleTicketAttributeValueChangeEvent`: When you receive this type of event, it means that your ticket has undergone changes, such as adding a note or attachment, for example.
+
+* `TroubleTicketResolvedEvent`: When you receive this type of event, it means that your ticket has been resolved.
+
+* `TroubleTicketInformationRequiredEvent`: When you receive this type of event, it means that your ticket transitions to the Pending state, indicating that additional information is required from the stakeholders.
+
+* `TroubleTicketStatusChangeEvent`: When you receive this type of event, this means that your ticket changes status. 
+
+11\. I want to delete a subscription to notifications /Hub.
+-----------------------------------------------------------
+
+To delete the listener, you send a `DELETE` request with the `ID` of the callback URL.
+`id of callback URL` is mandatory 
+
+_Request:_ 
+    
+    DELETE https://api.orange.com/discover/owf-trouble-ticket-management/v1/hub/{id}
+
+
+_Example:_ 
+    
+    DELETE https://api.orange.com/discover/owf-trouble-ticket-management/v1/hub/73O
